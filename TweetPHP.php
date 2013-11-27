@@ -117,28 +117,42 @@
         'secret'          => $this->options['access_token_secret']
       ));
 
+      if(strpos($this->options['twitter_screen_name'],"#") > -1){
+      // Search Hashtags
+        $params = array(
+          'q' => $this->options['twitter_screen_name']
+        );
+
+        $response_code = $this->tmhOAuth->request('GET', $this->tmhOAuth->url('1.1/search/tweets.json'), $params);
+      } else {
       // Request Twitter timeline.
-      $params = array(
-        'screen_name' => $this->options['twitter_screen_name']
-      );
-      if ($this->options['ignore_retweets']) {
-        $params['include_rts'] = 'false';
+        $params = array(
+          'screen_name' => $this->options['twitter_screen_name']
+        );
+        if ($this->options['ignore_retweets']) {
+          $params['include_rts'] = 'false';
+        }
+        if ($this->options['ignore_replies']) {
+          $params['exclude_replies'] = 'true';
+        }
+        $response_code = $this->tmhOAuth->request('GET', $this->tmhOAuth->url('1.1/statuses/user_timeline.json'), $params);       
       }
-      if ($this->options['ignore_replies']) {
-        $params['exclude_replies'] = 'true';
-      }
-      $response_code = $this->tmhOAuth->request('GET', $this->tmhOAuth->url('1.1/statuses/user_timeline.json'), $params);
 
       $this->add_debug_item('tmhOAuth response code: ' . $response_code);
       
       if ($response_code == 200) {
         $data = json_decode($this->tmhOAuth->response['response'], true);
 
+        $fordata = $data;
+        if(strpos($this->options['twitter_screen_name'],"#") > -1){
+          $fordata = $data['statuses'];
+        }
+
         // Open the twitter wrapping element.
         $html = $this->options['twitter_wrap_open'];
 
         // Iterate over tweets.
-        foreach($data as $tweet) {
+        foreach($fordata as $tweet) {
           $html .=  $this->parse_tweet($tweet);
           // If we have processed enough tweets, stop.
           if ($this->tweet_count >= $this->options['tweets_to_display']){
@@ -156,11 +170,11 @@
 
         // Save the raw data array to a file. 
         $file = fopen($this->options['cache_file_raw'], 'w');
-        fwrite($file, serialize($data)); 
+        fwrite($file, serialize($fordata)); 
         fclose($file);
 
         $this->tweet_list = $html;
-        $this->tweet_array = $data;
+        $this->tweet_array = $fordata;
       } else {
         $this->add_debug_item('Bad tmhOAuth response code.');
       }
